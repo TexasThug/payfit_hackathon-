@@ -88,6 +88,7 @@ export interface ComputedValues {
   crds: number;
   csg_total: number;
   mutuelle_sal: number;
+  apec_sal: number;
   total_sal: number;
   netMonthly: number;
   netImposable: number;
@@ -104,6 +105,8 @@ export interface ComputedValues {
   agirc_t1_pat: number;
   agirc_t2_pat: number;
   ceg_pat: number;
+  apec_pat: number;
+  prevoyance_cadre_pat: number;
   mutuelle_pat: number;
   filonCoeff: number;
   filonReduction: number;
@@ -151,12 +154,15 @@ function computeValues(state: SalaryState): ComputedValues {
 
   const mutuelle_sal = mutuelleMonthly;
 
+  // APEC salarié (cadres uniquement) : 0,024% sur 4 PSS — source : URSSAF/APEC
+  const apec_sal = status === 'cadre' ? 0.00024 * Math.min(grossMonthly, 4 * PSS_MONTHLY) : 0;
+
   const total_sal = ss_plafonnee + ss_deplafonnee + agirc_t1 + agirc_t2
-    + ceg + cet + csg_total + mutuelle_sal;
+    + ceg + cet + csg_total + mutuelle_sal + apec_sal;
 
   const netMonthly = grossMonthly - total_sal;
   const netImposable = grossMonthly - ss_plafonnee - ss_deplafonnee
-    - agirc_t1 - agirc_t2 - ceg - cet - csg_deductible - mutuelle_sal;
+    - agirc_t1 - agirc_t2 - ceg - cet - csg_deductible - mutuelle_sal - apec_sal;
   const netAnnual = netMonthly * 12;
 
   // --- Cotisations patronales ---
@@ -193,6 +199,13 @@ function computeValues(state: SalaryState): ComputedValues {
   // CET patron : 0,21% sur T2
   const cet_pat = 0.0021 * t2_slice;
 
+  // APEC patron (cadres uniquement) : 0,036% sur 4 PSS — source : URSSAF/APEC
+  const apec_pat = status === 'cadre' ? 0.00036 * Math.min(grossMonthly, 4 * PSS_MONTHLY) : 0;
+
+  // Prévoyance cadre — minimum légal ANI du 17/11/2017 (garantie décès)
+  // Patronal : 1,50% sur T1 minimum obligatoire pour les cadres
+  const prevoyance_cadre_pat = status === 'cadre' ? 0.015 * Math.min(grossMonthly, PSS_MONTHLY) : 0;
+
   const mutuelle_pat = mutuelleMonthly;
 
   // Réduction Fillon : T = 0,3193 (< 50 salariés, mai–déc 2025) — source : LégiSocial
@@ -209,7 +222,9 @@ function computeValues(state: SalaryState): ComputedValues {
 
   const total_pat = ss_maladie_pat + ss_vieillesse_plaf_pat + ss_vieillesse_deplaf_pat
     + alloc_fam + atmp + fnal + chomage_pat + ags
-    + agirc_t1_pat + agirc_t2_pat + ceg_pat + cet_pat + mutuelle_pat - filonReduction
+    + agirc_t1_pat + agirc_t2_pat + ceg_pat + cet_pat
+    + apec_pat + prevoyance_cadre_pat
+    + mutuelle_pat - filonReduction
     + cdd_surcharge;
 
   const employerCost = grossMonthly + total_pat;
@@ -233,10 +248,10 @@ function computeValues(state: SalaryState): ComputedValues {
   return {
     grossMonthly, ss_plafonnee, ss_deplafonnee, agirc_t1, agirc_t2,
     ceg, cet, csgBase, csg_non_deductible, csg_deductible, crds, csg_total,
-    mutuelle_sal, total_sal, netMonthly, netImposable, netAnnual,
+    mutuelle_sal, apec_sal, total_sal, netMonthly, netImposable, netAnnual,
     ss_maladie_pat, ss_vieillesse_plaf_pat, ss_vieillesse_deplaf_pat,
     alloc_fam, atmp, fnal, chomage_pat, ags,
-    agirc_t1_pat, agirc_t2_pat, ceg_pat, mutuelle_pat,
+    agirc_t1_pat, agirc_t2_pat, ceg_pat, apec_pat, prevoyance_cadre_pat, mutuelle_pat,
     filonCoeff, filonReduction, total_pat, employerCost, employerCostAnnual,
     cdd_surcharge, cdd_indemnite_precarite,
     simNetMonthly, simNetAnnual,

@@ -2,6 +2,7 @@ import { useSalary, formatEuro } from '@/contexts/SalaryContext';
 
 const EmployeeResults = () => {
   const { state, computed } = useSalary();
+  const { status, contractType, grossAnnual } = state;
 
   return (
     <div className="space-y-4">
@@ -46,6 +47,26 @@ const EmployeeResults = () => {
           <p className="text-lg font-semibold text-foreground">{formatEuro(computed.netImposable)}</p>
         </div>
       </div>
+
+      {/* Cadre badge */}
+      {status === 'cadre' && (
+        <div className="payfit-card !p-3 border border-border animate-fade-in">
+          <p className="text-xs font-medium text-foreground mb-1">Statut cadre</p>
+          <p className="text-xs text-text-secondary">
+            Cotisation APEC incluse ({formatEuro(computed.apec_sal)}/mois). Votre employeur verse en plus la prévoyance cadre obligatoire (≥ 1,5% sur T1 — ANI 2017).
+          </p>
+        </div>
+      )}
+
+      {/* CDD info */}
+      {contractType === 'CDD' && (
+        <div className="payfit-card !p-3 border border-border animate-fade-in">
+          <p className="text-xs font-medium text-foreground mb-1">Contrat CDD</p>
+          <p className="text-xs text-text-secondary">
+            Votre salaire net mensuel est identique à un CDI équivalent. En fin de contrat, vous percevrez une <strong>indemnité de précarité de {formatEuro(computed.cdd_indemnite_precarite)}</strong> (10% du brut total). Le surcoût chômage est supporté par l'employeur.
+          </p>
+        </div>
+      )}
 
       {/* Inline CTA */}
       <div className="payfit-card !p-4 bg-accent border border-blue-200">

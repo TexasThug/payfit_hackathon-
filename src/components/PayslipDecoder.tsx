@@ -89,6 +89,13 @@ const PayslipDecoder = () => {
       show: true,
     },
     {
+      label: 'APEC (cadres)',
+      amount: computed.apec_sal,
+      negative: true,
+      tooltip: 'Association Pour l\'Emploi des Cadres : 0,024% sur 4 PSS. Cotisation obligatoire pour les cadres uniquement — finance les services d\'accompagnement de l\'APEC (bilan, coaching, offres d\'emploi cadres).',
+      show: computed.apec_sal > 0,
+    },
+    {
       label: 'NET IMPOSABLE',
       amount: computed.netImposable,
       tooltip: 'Base de calcul de votre impôt sur le revenu. Ce montant × 12 est pré-rempli automatiquement par votre employeur dans votre déclaration d\'impôts.',
