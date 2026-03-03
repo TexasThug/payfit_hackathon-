@@ -8,7 +8,7 @@ import {
 const faqItems = [
   {
     q: 'Comment calculer son salaire net à partir du brut ?',
-    a: 'Votre salaire net = salaire brut − cotisations salariales (environ 22-25% pour un non-cadre, 25-28% pour un cadre). En 2025 : net ≈ brut × 0,785 (non-cadre) ou × 0,778 (cadre).',
+    a: 'Votre salaire net = salaire brut − cotisations salariales (environ 21-23% hors mutuelle). En 2025 avec les taux URSSAF/AGIRC-ARRCO en vigueur : net ≈ brut × 0,78 en moyenne pour un salaire sous le Plafond Sécu (3 925 €/mois). Ce ratio baisse légèrement pour les hauts salaires (T2 AGIRC-ARRCO).',
   },
   {
     q: 'Quelle est la différence entre net imposable et net à payer ?',
@@ -16,7 +16,7 @@ const faqItems = [
   },
   {
     q: 'Pourquoi un CDD coûte-t-il plus cher à l\'employeur ?',
-    a: 'Un CDD de moins d\'1 mois entraîne une majoration de 3% sur les cotisations chômage patronales, plus une indemnité de précarité de 10% du brut total versée en fin de contrat.',
+    a: 'Pour tout CDD, l\'employeur verse une indemnité de précarité de 10% du brut total en fin de contrat. En plus, une majoration chômage patronale s\'applique sur les CDD courts : +3% si durée ≤ 1 mois, +1,5% si durée entre 1 et 3 mois. Aucune majoration au-delà de 3 mois.',
   },
   {
     q: 'Qu\'est-ce que la réduction Fillon ?',

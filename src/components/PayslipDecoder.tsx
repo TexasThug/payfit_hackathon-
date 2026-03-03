@@ -43,14 +43,14 @@ const PayslipDecoder = () => {
       label: 'AGIRC-ARRCO Tranche 1',
       amount: computed.agirc_t1,
       negative: true,
-      tooltip: '3,93% sur la part de salaire ≤ 3 925€/mois. Votre retraite complémentaire obligatoire — vous accumulez des points tout au long de votre carrière.',
+      tooltip: '3,15% sur la part de salaire ≤ 3 925€/mois (taux d\'appel 127% inclus). Votre retraite complémentaire obligatoire — vous accumulez des points tout au long de votre carrière.',
       show: true,
     },
     {
       label: 'AGIRC-ARRCO Tranche 2',
       amount: computed.agirc_t2,
       negative: true,
-      tooltip: '10,12% sur la part de salaire entre 3 925€ et 31 400€/mois. S\'applique uniquement si votre salaire dépasse le Plafond Sécurité Sociale.',
+      tooltip: '8,64% sur la part de salaire entre 3 925€ et 31 400€/mois (taux d\'appel 127% inclus). S\'applique uniquement si votre salaire dépasse le Plafond Sécurité Sociale.',
       show: computed.agirc_t2 > 0,
     },
     {

@@ -121,16 +121,28 @@ function computeValues(state: SalaryState): ComputedValues {
   const { grossAnnual, status, contractType, cddDuration, mutuelleMonthly, simulationMode, raisePercent, bonusAmount } = state;
   const grossMonthly = grossAnnual / 12;
 
-  // Employee
+  // Tranche T2 : portion entre 1 PSS et 8 PSS
+  const t2_slice = grossMonthly > PSS_MONTHLY
+    ? Math.min(grossMonthly - PSS_MONTHLY, 7 * PSS_MONTHLY)
+    : 0;
+
+  // --- Cotisations salariales ---
+  // SS vieillesse
   const ss_plafonnee = 0.069 * Math.min(grossMonthly, PSS_MONTHLY);
   const ss_deplafonnee = 0.004 * grossMonthly;
-  const agirc_t1 = 0.0393 * Math.min(grossMonthly, PSS_MONTHLY);
-  const agirc_t2 = grossMonthly > PSS_MONTHLY
-    ? 0.1012 * Math.min(grossMonthly - PSS_MONTHLY, 7 * PSS_MONTHLY)
-    : 0;
-  const ceg = 0.0086 * (Math.min(grossMonthly, PSS_MONTHLY) + (grossMonthly > PSS_MONTHLY ? Math.min(grossMonthly - PSS_MONTHLY, 7 * PSS_MONTHLY) : 0));
-  const cet = grossMonthly > PSS_MONTHLY ? 0.0014 * grossMonthly : 0;
 
+  // AGIRC-ARRCO 2025 — source : Circulaire AGIRC-ARRCO 2024-18
+  // Taux d'appel (127%) déjà inclus : T1 salarié 3,15% / T2 salarié 8,64%
+  const agirc_t1 = 0.0315 * Math.min(grossMonthly, PSS_MONTHLY);
+  const agirc_t2 = 0.0864 * t2_slice;
+
+  // CEG salarié : T1 0,86% / T2 1,08% — source : LégiSocial AGIRC-ARRCO 2025
+  const ceg = 0.0086 * Math.min(grossMonthly, PSS_MONTHLY) + 0.0108 * t2_slice;
+
+  // CET salarié : 0,14% sur T2 uniquement — source : LégiSocial AGIRC-ARRCO 2025
+  const cet = 0.0014 * t2_slice;
+
+  // CSG/CRDS — assiette = 98,25% du brut (abattement forfaitaire frais pro)
   const csgBase = grossMonthly * 0.9825;
   const csg_non_deductible = 0.024 * csgBase;
   const csg_deductible = 0.068 * csgBase;
@@ -147,38 +159,61 @@ function computeValues(state: SalaryState): ComputedValues {
     - agirc_t1 - agirc_t2 - ceg - cet - csg_deductible - mutuelle_sal;
   const netAnnual = netMonthly * 12;
 
-  // Employer
-  const ss_maladie_pat = 0.13 * grossMonthly;
+  // --- Cotisations patronales ---
+  // SS maladie : 7% taux réduit si ≤ 2,25 SMIC (LFSS 2025), sinon 13%
+  // source : LégiSocial + Décret du 30/12/2024
+  const ss_maladie_pat = grossMonthly <= 2.25 * SMIC_MONTHLY_GROSS
+    ? 0.07 * grossMonthly
+    : 0.13 * grossMonthly;
+
   const ss_vieillesse_plaf_pat = 0.0855 * Math.min(grossMonthly, PSS_MONTHLY);
-  const ss_vieillesse_deplaf_pat = 0.019 * grossMonthly;
-  const alloc_fam = grossMonthly <= 3.5 * SMIC_MONTHLY_GROSS ? 0.0345 * grossMonthly : 0.0525 * grossMonthly;
-  const atmp = 0.0157 * grossMonthly;
-  const fnal = 0.001 * Math.min(grossMonthly, PSS_MONTHLY);
-  const chomage_pat = 0.0405 * Math.min(grossMonthly, 4 * PSS_MONTHLY);
-  const ags = 0.002 * Math.min(grossMonthly, 4 * PSS_MONTHLY);
-  const agirc_t1_pat = 0.0591 * Math.min(grossMonthly, PSS_MONTHLY);
-  const agirc_t2_pat = grossMonthly > PSS_MONTHLY
-    ? 0.1519 * Math.min(grossMonthly - PSS_MONTHLY, 7 * PSS_MONTHLY)
-    : 0;
-  const ceg_pat = 0.0129 * Math.min(grossMonthly, PSS_MONTHLY);
+  // SS vieillesse déplafonnée patron : 2,02% depuis 2024 — source : CLEISS
+  const ss_vieillesse_deplaf_pat = 0.0202 * grossMonthly;
+
+  // Allocations familiales : seuil abaissé à 3,3 SMIC (LFSS 2025, était 3,5)
+  const alloc_fam = grossMonthly <= 3.3 * SMIC_MONTHLY_GROSS ? 0.0345 * grossMonthly : 0.0525 * grossMonthly;
+
+  const atmp = 0.0157 * grossMonthly; // Taux moyen indicatif — variable par entreprise/secteur
+
+  const fnal = 0.001 * Math.min(grossMonthly, PSS_MONTHLY); // 0,10% (hypothèse < 50 salariés)
+
+  // Assurance chômage patron : 4,00% depuis le 1er mai 2025 — source : URSSAF
+  const chomage_pat = 0.040 * Math.min(grossMonthly, 4 * PSS_MONTHLY);
+
+  // AGS : 0,25% depuis juillet 2024 — source : Weblex / Service-Public
+  const ags = 0.0025 * Math.min(grossMonthly, 4 * PSS_MONTHLY);
+
+  // AGIRC-ARRCO patron 2025 : T1 4,72% / T2 12,95%
+  const agirc_t1_pat = 0.0472 * Math.min(grossMonthly, PSS_MONTHLY);
+  const agirc_t2_pat = 0.1295 * t2_slice;
+
+  // CEG patron : T1 1,29% / T2 1,62%
+  const ceg_pat = 0.0129 * Math.min(grossMonthly, PSS_MONTHLY) + 0.0162 * t2_slice;
+
+  // CET patron : 0,21% sur T2
+  const cet_pat = 0.0021 * t2_slice;
+
   const mutuelle_pat = mutuelleMonthly;
 
+  // Réduction Fillon : T = 0,3193 (< 50 salariés, mai–déc 2025) — source : LégiSocial
   const filonCoeff = grossMonthly <= 1.6 * SMIC_MONTHLY_GROSS
-    ? Math.max(0, 0.3214 * ((1.6 * SMIC_MONTHLY_GROSS / grossMonthly) - 1) / 0.6)
+    ? Math.max(0, 0.3193 * ((1.6 * SMIC_MONTHLY_GROSS / grossMonthly) - 1) / 0.6)
     : 0;
   const filonReduction = filonCoeff * grossMonthly;
 
+  // CDD : majoration chômage patronal (0% si durée > 3 mois)
+  const cdd_surcharge = contractType === 'CDD'
+    ? (cddDuration <= 1 ? 0.03 : cddDuration <= 3 ? 0.015 : 0) * grossMonthly
+    : 0;
+  const cdd_indemnite_precarite = contractType === 'CDD' ? grossAnnual * 0.1 : 0;
+
   const total_pat = ss_maladie_pat + ss_vieillesse_plaf_pat + ss_vieillesse_deplaf_pat
     + alloc_fam + atmp + fnal + chomage_pat + ags
-    + agirc_t1_pat + agirc_t2_pat + ceg_pat + mutuelle_pat - filonReduction;
+    + agirc_t1_pat + agirc_t2_pat + ceg_pat + cet_pat + mutuelle_pat - filonReduction
+    + cdd_surcharge;
 
   const employerCost = grossMonthly + total_pat;
   const employerCostAnnual = employerCost * 12;
-
-  const cdd_surcharge = contractType === 'CDD'
-    ? (cddDuration <= 1 ? 0.03 : cddDuration <= 3 ? 0.015 : 0.005) * grossMonthly
-    : 0;
-  const cdd_indemnite_precarite = contractType === 'CDD' ? grossAnnual * 0.1 : 0;
 
   // Simulation
   let simNetMonthly: number | null = null;

@@ -68,8 +68,8 @@ const EmployerResults = () => {
               <tbody className="divide-y divide-border">
                 <tr>
                   <td className="px-4 py-2">Coût mensuel</td>
+                  <td className="px-4 py-2 text-right">{formatEuro(computed.employerCost - computed.cdd_surcharge)}</td>
                   <td className="px-4 py-2 text-right">{formatEuro(computed.employerCost)}</td>
-                  <td className="px-4 py-2 text-right">{formatEuro(computed.employerCost + computed.cdd_surcharge)}</td>
                   <td className="px-4 py-2 text-right text-warning font-medium">+{formatEuro(computed.cdd_surcharge)}</td>
                 </tr>
                 <tr>
