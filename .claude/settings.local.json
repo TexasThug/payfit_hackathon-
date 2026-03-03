@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:zichen.dev)",
+      "WebFetch(domain:github.com)",
+      "Bash(node:*)",
+      "Bash(npx bmad-method@latest:*)"
+    ]
+  }
+}

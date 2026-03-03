@@ -1,0 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --background-secondary: 0 0% 96.1%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    --primary: 213 90% 46%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 213 85% 56%;
+    --primary-dark: 213 88% 36%;
+    --primary-darker: 213 88% 26%;
+
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 10%;
+
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 50%;
+
+    --accent: 213 90% 96%;
+    --accent-foreground: 213 90% 46%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+
+    --border: 0 0% 90.2%;
+    --input: 0 0% 90.2%;
+    --ring: 213 90% 46%;
+
+    --radius: 0.5rem;
+
+    --blue-100: 213 90% 96%;
+    --blue-200: 213 80% 86%;
+    --blue-300: 213 85% 76%;
+    --blue-400: 213 88% 66%;
+
+    --text-secondary: 0 0% 50%;
+    --text-muted: 0 0% 70%;
+    --subtle-gray: 0 0% 80%;
+
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  }
+}
+
+@layer components {
+  .payfit-card {
+    @apply bg-card rounded-lg p-6;
+    box-shadow: var(--card-shadow);
+  }
+
+  .payfit-input {
+    @apply rounded-md border border-border bg-background px-3 py-2 text-sm;
+    border-radius: 6px;
+  }
+
+  .payfit-tag {
+    @apply inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded;
+    border-radius: 4px;
+  }
+
+  .payfit-section-header {
+    @apply text-xs uppercase tracking-wider font-medium;
+    color: hsl(var(--text-secondary));
+    background: hsl(var(--background-secondary));
+  }
+
+  .payslip-line {
+    @apply flex items-center justify-between px-4 py-2.5 transition-colors duration-200;
+  }
+  .payslip-line:hover {
+    background: hsl(var(--accent));
+  }
+
+  .payslip-net {
+    background: hsl(var(--accent));
+    color: hsl(var(--primary));
+    border-left: 3px solid hsl(var(--primary));
+    @apply font-bold text-lg px-4 py-3;
+  }
+
+  .result-value {
+    color: hsl(var(--primary));
+    @apply font-bold;
+  }
+
+  .tooltip-payfit {
+    @apply rounded-lg px-4 py-3 text-sm leading-relaxed;
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+    max-width: 320px;
+  }
+
+  .animate-number {
+    transition: all 0.4s ease-out;
+  }
+
+  .toggle-pill {
+    @apply px-4 py-2 text-sm font-medium rounded-md cursor-pointer transition-all duration-150;
+  }
+  .toggle-pill-active {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  .toggle-pill-inactive {
+    color: hsl(var(--text-secondary));
+    background: transparent;
+  }
+}
