@@ -2,8 +2,64 @@ import { useSalary, formatEuro } from '@/contexts/SalaryContext';
 
 const EmployeeResults = () => {
   const { state, computed } = useSalary();
-  const { status, contractType, grossAnnual } = state;
+  const { status, contractType } = state;
+  const { isInverseMode, pasRate } = state;
 
+  // ── MODE INVERSÉ ──────────────────────────────────────────────
+  if (isInverseMode) {
+    if (!computed.inverseBrutAnnual) {
+      return (
+        <div className="payfit-card text-center text-text-secondary text-sm py-8">
+          Entrez un net mensuel souhaité pour calculer le brut à demander.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {/* Result principal */}
+        <div className="payfit-card border-l-4 border-primary bg-gradient-to-r from-accent to-background">
+          <p className="text-sm font-medium text-text-secondary mb-1">Brut annuel à négocier</p>
+          <p className="text-4xl font-bold result-value animate-counter">
+            {formatEuro(computed.inverseBrutAnnual!)}
+          </p>
+          <p className="text-sm text-text-secondary mt-1">
+            soit {formatEuro(computed.inverseBrutMonthly!)} / mois brut
+          </p>
+        </div>
+
+        {/* Vérification */}
+        <div className="payfit-card !p-4 border border-border">
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+            Ce que vous toucherez réellement
+          </p>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-text-secondary">Net à payer (fiche de paie)</span>
+              <span className="font-semibold">≈ {formatEuro(state.targetNet)}</span>
+            </div>
+            {pasRate > 0 && (
+              <div className="flex justify-between text-orange-600">
+                <span>− PAS ({(pasRate * 100).toFixed(1)} %)</span>
+                <span className="font-semibold">− {formatEuro(computed.inverseBrutMonthly! * pasRate * 0.9)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold border-t border-border pt-2">
+              <span>Coût total employeur</span>
+              <span className="result-value">{formatEuro(computed.inverseEmployerCost!)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="payfit-card !p-3 bg-accent border border-blue-200 text-sm text-text-secondary">
+          💡 Ce calcul s'applique à un CDI, statut {status === 'cadre' ? 'cadre' : 'non-cadre'}.
+          Ajustez les paramètres ci-contre pour affiner.
+        </div>
+      </div>
+    );
+  }
+
+  // ── MODE NORMAL ───────────────────────────────────────────────
   return (
     <div className="space-y-4">
       {/* Main Result */}
@@ -15,6 +71,29 @@ const EmployeeResults = () => {
         <p className="text-sm text-text-secondary mt-1">
           Net annuel : {formatEuro(computed.netAnnual)} / an
         </p>
+
+        {/* Net-Net après PAS */}
+        {pasRate > 0 && (
+          <div className="mt-3 pt-3 border-t border-border animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-text-secondary">
+                  Après PAS ({(pasRate * 100).toFixed(1)} %)
+                </p>
+                <p className="text-2xl font-bold text-emerald-700">
+                  {formatEuro(computed.netNet)}
+                </p>
+                <p className="text-xs text-emerald-600">
+                  Net-net réel sur votre compte
+                </p>
+              </div>
+              <div className="text-right text-xs text-text-muted">
+                <p>PAS : − {formatEuro(computed.pasMonthly)}</p>
+                <p className="mt-0.5">/ mois</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Simulation comparison */}
         {computed.simNetMonthly !== null && (

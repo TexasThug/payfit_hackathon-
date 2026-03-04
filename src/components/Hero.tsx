@@ -9,7 +9,7 @@ const Hero = () => {
           Calculette Salaire Brut Net 2025
         </h1>
         <p className="text-base md:text-lg text-text-secondary max-w-2xl mx-auto">
-          Simulez votre salaire net, comprenez chaque ligne de votre fiche de paie. Mis à jour avec les taux 2025.
+          Simulez votre salaire net, comprenez chaque ligne de votre fiche de paie.<br />Mis à jour avec les taux 2025.
         </p>
       </div>
     </section>

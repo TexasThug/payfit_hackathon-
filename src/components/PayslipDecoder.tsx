@@ -9,6 +9,7 @@ interface PayslipLine {
   tooltip: string;
   isSubtotal?: boolean;
   isNet?: boolean;
+  isNetNet?: boolean;
   isSectionHeader?: boolean;
   show?: boolean;
 }
@@ -16,6 +17,8 @@ interface PayslipLine {
 const PayslipDecoder = () => {
   const { state, computed } = useSalary();
   const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
+
+  const { pasRate } = state;
 
   const lines: PayslipLine[] = [
     { label: 'COTISATIONS SALARIALES', amount: 0, tooltip: '', isSectionHeader: true, show: true },
@@ -105,9 +108,24 @@ const PayslipDecoder = () => {
     {
       label: 'NET À PAYER',
       amount: computed.netMonthly,
-      tooltip: 'La somme virée sur votre compte bancaire.',
+      tooltip: 'La somme virée sur votre compte bancaire avant prélèvement à la source.',
       isNet: true,
       show: true,
+    },
+    // Feature 1 — ligne PAS
+    {
+      label: `Prélèvement à la source (${(pasRate * 100).toFixed(1)} %)`,
+      amount: computed.pasMonthly,
+      negative: true,
+      tooltip: `Impôt sur le revenu prélevé directement à la source par l'employeur pour le compte de la DGFiP. Taux personnalisé : ${(pasRate * 100).toFixed(1)} %, appliqué sur votre net imposable (${formatEuroDecimal(computed.netImposable)}). Ce montant transite par votre employeur — il ne constitue pas une cotisation sociale.`,
+      show: pasRate > 0,
+    },
+    {
+      label: 'NET-NET (après impôt)',
+      amount: computed.netNet,
+      tooltip: 'Ce qui tombe réellement sur votre compte bancaire chaque mois, après déduction du prélèvement à la source.',
+      isNetNet: true,
+      show: pasRate > 0,
     },
   ];
 
@@ -145,34 +163,41 @@ const PayslipDecoder = () => {
               );
             }
 
-            const lineClass = line.isNet
+            const lineClass = line.isNetNet
+              ? 'payslip-net bg-emerald-50'
+              : line.isNet
               ? 'payslip-net'
               : line.isSubtotal
               ? 'payslip-line font-semibold border-t-2 border-border'
               : 'payslip-line';
 
+            const amountColor = line.isNetNet
+              ? 'text-emerald-700'
+              : '';
+
             return (
               <div key={i} className={`${lineClass} relative`}>
-                <span className={`text-sm ${line.isNet ? 'text-lg font-bold' : ''}`}>
+                <span className={`text-sm ${line.isNet || line.isNetNet ? 'text-lg font-bold' : ''} ${line.isNetNet ? 'text-emerald-700' : ''}`}>
                   {line.label}
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className={`text-sm font-medium tabular-nums ${line.isNet ? 'text-lg font-bold' : ''}`}>
+                  <span className={`text-sm font-medium tabular-nums ${line.isNet || line.isNetNet ? 'text-lg font-bold' : ''} ${amountColor}`}>
                     {line.negative ? '- ' : ''}{formatEuroDecimal(line.amount)}
                   </span>
-                  <button
-                    className="text-text-muted hover:text-primary transition-colors p-1"
-                    onClick={() => setActiveTooltip(activeTooltip === i ? null : i)}
-                    aria-label="Plus d'info"
-                  >
-                    <Info size={14} />
-                  </button>
+                  {line.tooltip && (
+                    <button
+                      className="text-text-muted hover:text-primary transition-colors p-1"
+                      onClick={() => setActiveTooltip(activeTooltip === i ? null : i)}
+                      aria-label="Plus d'info"
+                    >
+                      <Info size={14} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Tooltip */}
                 {activeTooltip === i && (
                   <>
-                    {/* Backdrop for mobile */}
                     <div
                       className="fixed inset-0 z-40 md:hidden"
                       onClick={() => setActiveTooltip(null)}

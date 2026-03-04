@@ -5,9 +5,9 @@ const PSS_MONTHLY = 3925;
 const SMIC_MONTHLY_GROSS = 1801.80;
 
 export type Status = 'cadre' | 'non-cadre';
-export type ContractType = 'CDI' | 'CDD';
+export type ContractType = 'CDI' | 'CDD' | 'stagiaire';
 export type ActiveTab = 'employee' | 'employer';
-export type SimulationMode = 'raise' | 'bonus' | null;
+export type SimulationMode = 'raise' | 'bonus' | 'ppv' | null;
 
 export interface SalaryState {
   grossAnnual: number;
@@ -23,6 +23,16 @@ export interface SalaryState {
   raisePercent: number;
   bonusAmount: number;
   hasEdited: boolean;
+  // Feature 1 — PAS / Net-Net
+  pasRate: number;
+  // Feature 3 — Calculateur inversé
+  isInverseMode: boolean;
+  targetNet: number;
+  // Feature 4 — PPV
+  ppvAmount: number;
+  // Stagiaire
+  stagiaireMonthly: number;
+  stagiaireDuration: number;
 }
 
 export const initialState: SalaryState = {
@@ -39,6 +49,12 @@ export const initialState: SalaryState = {
   raisePercent: 0,
   bonusAmount: 0,
   hasEdited: false,
+  pasRate: 0,
+  isInverseMode: false,
+  targetNet: 2500,
+  ppvAmount: 1000,
+  stagiaireMonthly: 800,
+  stagiaireDuration: 6,
 };
 
 type Action =
@@ -53,6 +69,12 @@ type Action =
   | { type: 'SET_SIMULATION_MODE'; payload: SimulationMode }
   | { type: 'SET_RAISE_PERCENT'; payload: number }
   | { type: 'SET_BONUS_AMOUNT'; payload: number }
+  | { type: 'SET_PAS_RATE'; payload: number }
+  | { type: 'SET_INVERSE_MODE'; payload: boolean }
+  | { type: 'SET_TARGET_NET'; payload: number }
+  | { type: 'SET_PPV_AMOUNT'; payload: number }
+  | { type: 'SET_STAGIAIRE_MONTHLY'; payload: number }
+  | { type: 'SET_STAGIAIRE_DURATION'; payload: number }
   | { type: 'RESTORE_STATE'; payload: Partial<SalaryState> };
 
 function reducer(state: SalaryState, action: Action): SalaryState {
@@ -69,6 +91,12 @@ function reducer(state: SalaryState, action: Action): SalaryState {
     case 'SET_SIMULATION_MODE': return { ...state, simulationMode: action.payload };
     case 'SET_RAISE_PERCENT': return { ...state, raisePercent: action.payload, ...edited };
     case 'SET_BONUS_AMOUNT': return { ...state, bonusAmount: action.payload, ...edited };
+    case 'SET_PAS_RATE': return { ...state, pasRate: action.payload };
+    case 'SET_INVERSE_MODE': return { ...state, isInverseMode: action.payload };
+    case 'SET_TARGET_NET': return { ...state, targetNet: action.payload, ...edited };
+    case 'SET_PPV_AMOUNT': return { ...state, ppvAmount: action.payload };
+    case 'SET_STAGIAIRE_MONTHLY': return { ...state, stagiaireMonthly: action.payload, ...edited };
+    case 'SET_STAGIAIRE_DURATION': return { ...state, stagiaireDuration: action.payload, ...edited };
     case 'RESTORE_STATE': return { ...state, ...action.payload };
     default: return state;
   }
@@ -115,37 +143,60 @@ export interface ComputedValues {
   employerCostAnnual: number;
   cdd_surcharge: number;
   cdd_indemnite_precarite: number;
-  // Simulation
+  // Simulation augmentation/prime
   simNetMonthly: number | null;
   simNetAnnual: number | null;
+  // Feature 1 — PAS / Net-Net
+  pasMonthly: number;
+  netNet: number;
+  // Feature 3 — Calculateur inversé
+  inverseBrutMonthly: number | null;
+  inverseBrutAnnual: number | null;
+  inverseEmployerCost: number | null;
+  // Feature 4 — PPV
+  ppvNetClassic: number;
+  ppvNetPPV: number;
+  ppvEmployerCostClassic: number;
+  ppvEmployerCostPPV: number;
+  ppvGainEmployee: number;
+  ppvSavingEmployer: number;
+  // Stagiaire
+  stagiaireData: {
+    seuil: number;
+    excess: number;
+    chargesSal: number;
+    chargesPat: number;
+    netStagiaire: number;
+    costMonthly: number;
+    costTotal: number;
+    costCDIMonthly: number;
+    savingVsCDI: number;
+  } | null;
 }
 
-function computeValues(state: SalaryState): ComputedValues {
+// Pure salary computation — no PAS/inverse/PPV (safe for recursive calls)
+function computeCore(state: SalaryState): Omit<ComputedValues,
+  'pasMonthly' | 'netNet' |
+  'inverseBrutMonthly' | 'inverseBrutAnnual' | 'inverseEmployerCost' |
+  'ppvNetClassic' | 'ppvNetPPV' | 'ppvEmployerCostClassic' | 'ppvEmployerCostPPV' | 'ppvGainEmployee' | 'ppvSavingEmployer'
+> {
   const { grossAnnual, status, contractType, cddDuration, mutuelleMonthly, simulationMode, raisePercent, bonusAmount } = state;
   const grossMonthly = grossAnnual / 12;
 
-  // Tranche T2 : portion entre 1 PSS et 8 PSS
   const t2_slice = grossMonthly > PSS_MONTHLY
     ? Math.min(grossMonthly - PSS_MONTHLY, 7 * PSS_MONTHLY)
     : 0;
 
   // --- Cotisations salariales ---
-  // SS vieillesse
   const ss_plafonnee = 0.069 * Math.min(grossMonthly, PSS_MONTHLY);
   const ss_deplafonnee = 0.004 * grossMonthly;
 
-  // AGIRC-ARRCO 2025 — source : Circulaire AGIRC-ARRCO 2024-18
-  // Taux d'appel (127%) déjà inclus : T1 salarié 3,15% / T2 salarié 8,64%
   const agirc_t1 = 0.0315 * Math.min(grossMonthly, PSS_MONTHLY);
   const agirc_t2 = 0.0864 * t2_slice;
 
-  // CEG salarié : T1 0,86% / T2 1,08% — source : LégiSocial AGIRC-ARRCO 2025
   const ceg = 0.0086 * Math.min(grossMonthly, PSS_MONTHLY) + 0.0108 * t2_slice;
-
-  // CET salarié : 0,14% sur T2 uniquement — source : LégiSocial AGIRC-ARRCO 2025
   const cet = 0.0014 * t2_slice;
 
-  // CSG/CRDS — assiette = 98,25% du brut (abattement forfaitaire frais pro)
   const csgBase = grossMonthly * 0.9825;
   const csg_non_deductible = 0.024 * csgBase;
   const csg_deductible = 0.068 * csgBase;
@@ -153,8 +204,6 @@ function computeValues(state: SalaryState): ComputedValues {
   const csg_total = csg_non_deductible + csg_deductible + crds;
 
   const mutuelle_sal = mutuelleMonthly;
-
-  // APEC salarié (cadres uniquement) : 0,024% sur 4 PSS — source : URSSAF/APEC
   const apec_sal = status === 'cadre' ? 0.00024 * Math.min(grossMonthly, 4 * PSS_MONTHLY) : 0;
 
   const total_sal = ss_plafonnee + ss_deplafonnee + agirc_t1 + agirc_t2
@@ -166,59 +215,38 @@ function computeValues(state: SalaryState): ComputedValues {
   const netAnnual = netMonthly * 12;
 
   // --- Cotisations patronales ---
-  // SS maladie : 7% taux réduit si ≤ 2,25 SMIC (LFSS 2025), sinon 13%
-  // source : LégiSocial + Décret du 30/12/2024
   const ss_maladie_pat = grossMonthly <= 2.25 * SMIC_MONTHLY_GROSS
     ? 0.07 * grossMonthly
     : 0.13 * grossMonthly;
 
   const ss_vieillesse_plaf_pat = 0.0855 * Math.min(grossMonthly, PSS_MONTHLY);
-  // SS vieillesse déplafonnée patron : 2,02% depuis 2024 — source : CLEISS
   const ss_vieillesse_deplaf_pat = 0.0202 * grossMonthly;
 
-  // Allocations familiales : seuil abaissé à 3,3 SMIC (LFSS 2025, était 3,5)
   const alloc_fam = grossMonthly <= 3.3 * SMIC_MONTHLY_GROSS ? 0.0345 * grossMonthly : 0.0525 * grossMonthly;
-
-  const atmp = 0.0157 * grossMonthly; // Taux moyen indicatif — variable par entreprise/secteur
-
-  const fnal = 0.001 * Math.min(grossMonthly, PSS_MONTHLY); // 0,10% (hypothèse < 50 salariés)
-
-  // Assurance chômage patron : 4,00% depuis le 1er mai 2025 — source : URSSAF
+  const atmp = 0.0157 * grossMonthly;
+  const fnal = 0.001 * Math.min(grossMonthly, PSS_MONTHLY);
   const chomage_pat = 0.040 * Math.min(grossMonthly, 4 * PSS_MONTHLY);
-
-  // AGS : 0,25% depuis juillet 2024 — source : Weblex / Service-Public
   const ags = 0.0025 * Math.min(grossMonthly, 4 * PSS_MONTHLY);
 
-  // AGIRC-ARRCO patron 2025 : T1 4,72% / T2 12,95%
   const agirc_t1_pat = 0.0472 * Math.min(grossMonthly, PSS_MONTHLY);
   const agirc_t2_pat = 0.1295 * t2_slice;
-
-  // CEG patron : T1 1,29% / T2 1,62%
   const ceg_pat = 0.0129 * Math.min(grossMonthly, PSS_MONTHLY) + 0.0162 * t2_slice;
-
-  // CET patron : 0,21% sur T2
   const cet_pat = 0.0021 * t2_slice;
 
-  // APEC patron (cadres uniquement) : 0,036% sur 4 PSS — source : URSSAF/APEC
   const apec_pat = status === 'cadre' ? 0.00036 * Math.min(grossMonthly, 4 * PSS_MONTHLY) : 0;
-
-  // Prévoyance cadre — minimum légal ANI du 17/11/2017 (garantie décès)
-  // Patronal : 1,50% sur T1 minimum obligatoire pour les cadres
   const prevoyance_cadre_pat = status === 'cadre' ? 0.015 * Math.min(grossMonthly, PSS_MONTHLY) : 0;
-
   const mutuelle_pat = mutuelleMonthly;
 
-  // Réduction Fillon : T = 0,3193 (< 50 salariés, mai–déc 2025) — source : LégiSocial
   const filonCoeff = grossMonthly <= 1.6 * SMIC_MONTHLY_GROSS
     ? Math.max(0, 0.3193 * ((1.6 * SMIC_MONTHLY_GROSS / grossMonthly) - 1) / 0.6)
     : 0;
   const filonReduction = filonCoeff * grossMonthly;
 
-  // CDD : majoration chômage patronal (0% si durée > 3 mois)
   const cdd_surcharge = contractType === 'CDD'
     ? (cddDuration <= 1 ? 0.03 : cddDuration <= 3 ? 0.015 : 0) * grossMonthly
     : 0;
   const cdd_indemnite_precarite = contractType === 'CDD' ? grossAnnual * 0.1 : 0;
+  // stagiaire treated as CDI for core calc (stagiaire-specific calc done separately)
 
   const total_pat = ss_maladie_pat + ss_vieillesse_plaf_pat + ss_vieillesse_deplaf_pat
     + alloc_fam + atmp + fnal + chomage_pat + ags
@@ -230,17 +258,17 @@ function computeValues(state: SalaryState): ComputedValues {
   const employerCost = grossMonthly + total_pat;
   const employerCostAnnual = employerCost * 12;
 
-  // Simulation
+  // Simulation raise/bonus
   let simNetMonthly: number | null = null;
   let simNetAnnual: number | null = null;
   if (simulationMode === 'raise' && raisePercent > 0) {
     const simGross = grossAnnual * (1 + raisePercent / 100);
-    const simComputed = computeValues({ ...state, grossAnnual: simGross, simulationMode: null });
+    const simComputed = computeCore({ ...state, grossAnnual: simGross, simulationMode: null });
     simNetMonthly = simComputed.netMonthly;
     simNetAnnual = simComputed.netAnnual;
   } else if (simulationMode === 'bonus' && bonusAmount > 0) {
     const simGross = grossAnnual + bonusAmount;
-    const simComputed = computeValues({ ...state, grossAnnual: simGross, simulationMode: null });
+    const simComputed = computeCore({ ...state, grossAnnual: simGross, simulationMode: null });
     simNetMonthly = simComputed.netMonthly;
     simNetAnnual = simComputed.netAnnual;
   }
@@ -258,6 +286,116 @@ function computeValues(state: SalaryState): ComputedValues {
   };
 }
 
+// ── Stagiaire calculation ─────────────────────────────────────────────────
+// Seuil exonération = 15 % du PMSS mensuel (art. L.124-6 Code éducation)
+const SEUIL_STAGIAIRE = 0.15 * PSS_MONTHLY; // ≈ 588,75 €
+
+// Taux salarié applicable sur l'excédent (hors chômage)
+const TAUX_SAL_STAG =
+  0.069 + 0.004 + 0.0315 + 0.0086   // SS + AGIRC-T1 + CEG
+  + 0.9825 * (0.068 + 0.024 + 0.005); // CSG déd. + CSG non déd. + CRDS
+
+// Taux patronal sur l'excédent (hors chômage, AGS)
+const TAUX_PAT_STAG =
+  0.07 + 0.0855 + 0.0202 + 0.0345 + 0.0157 + 0.001 + 0.0472 + 0.0129;
+// maladie + vieillesse plaf/déplaf + alloc fam + AT/MP + FNAL + AGIRC-T1 + CEG
+
+function computeStagiaire(state: SalaryState) {
+  const { stagiaireMonthly, stagiaireDuration } = state;
+  const seuil  = SEUIL_STAGIAIRE;
+  const excess = Math.max(0, stagiaireMonthly - seuil);
+
+  const chargesSal   = excess * TAUX_SAL_STAG;
+  const chargesPat   = excess * TAUX_PAT_STAG;
+  const netStagiaire = stagiaireMonthly - chargesSal;
+  const costMonthly  = stagiaireMonthly + chargesPat;
+  const costTotal    = costMonthly * stagiaireDuration;
+
+  // Comparison: même brut en CDI
+  const cdiCore = computeCore({
+    ...state,
+    grossAnnual: stagiaireMonthly * 12,
+    contractType: 'CDI',
+    simulationMode: null,
+  });
+  const costCDIMonthly = cdiCore.employerCost;
+  const savingVsCDI    = (costCDIMonthly - costMonthly) * stagiaireDuration;
+
+  return { seuil, excess, chargesSal, chargesPat, netStagiaire, costMonthly, costTotal, costCDIMonthly, savingVsCDI };
+}
+
+function computeValues(state: SalaryState): ComputedValues {
+  const base = computeCore(state);
+
+  // Feature 1 — PAS
+  const pasMonthly = state.pasRate * base.netImposable;
+  const netNet = base.netMonthly - pasMonthly;
+
+  // Feature 3 — Calculateur inversé (binary search)
+  let inverseBrutMonthly: number | null = null;
+  let inverseBrutAnnual: number | null = null;
+  let inverseEmployerCost: number | null = null;
+
+  if (state.isInverseMode && state.targetNet > 0) {
+    let low = state.targetNet;
+    let high = state.targetNet * 5;
+    for (let i = 0; i < 60; i++) {
+      const mid = (low + high) / 2;
+      const trial = computeCore({ ...state, grossAnnual: mid * 12, simulationMode: null });
+      if (trial.netMonthly < state.targetNet) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    inverseBrutMonthly = (low + high) / 2;
+    inverseBrutAnnual = inverseBrutMonthly * 12;
+    const invCore = computeCore({ ...state, grossAnnual: inverseBrutAnnual, simulationMode: null });
+    inverseEmployerCost = invCore.employerCost;
+  }
+
+  // Feature 4 — PPV vs Prime classique
+  let ppvNetClassic = 0;
+  let ppvNetPPV = 0;
+  let ppvEmployerCostClassic = 0;
+  let ppvEmployerCostPPV = 0;
+
+  if (state.ppvAmount > 0) {
+    // Delta method: prime spread over the year (approximation)
+    const withPrime = computeCore({ ...state, grossAnnual: state.grossAnnual + state.ppvAmount, simulationMode: null });
+    const netDeltaAnnual = (withPrime.netMonthly - base.netMonthly) * 12;
+    const netImposableDeltaAnnual = (withPrime.netImposable - base.netImposable) * 12;
+
+    ppvNetClassic = netDeltaAnnual - netImposableDeltaAnnual * state.pasRate;
+    ppvEmployerCostClassic = withPrime.employerCostAnnual - base.employerCostAnnual;
+
+    // PPV 2025 : exonérée cotisations sal/pat, soumise CSG/CRDS (9,7% sur 98,25%), exonérée IR
+    ppvNetPPV = state.ppvAmount * (1 - 0.9825 * 0.097);
+    ppvEmployerCostPPV = state.ppvAmount; // 0 patronal charges
+  }
+
+  // Stagiaire
+  const stagiaireData = state.contractType === 'stagiaire'
+    ? computeStagiaire(state)
+    : null;
+
+  return {
+    ...base,
+    pasMonthly,
+    netNet,
+    inverseBrutMonthly,
+    inverseBrutAnnual,
+    inverseEmployerCost,
+    ppvNetClassic,
+    ppvNetPPV,
+    ppvEmployerCostClassic,
+    ppvEmployerCostPPV,
+    ppvGainEmployee: ppvNetPPV - ppvNetClassic,
+    ppvSavingEmployer: ppvEmployerCostClassic - ppvEmployerCostPPV,
+    stagiaireData,
+  };
+}
+
 interface SalaryContextType {
   state: SalaryState;
   computed: ComputedValues;
@@ -269,7 +407,6 @@ const SalaryContext = createContext<SalaryContextType | null>(null);
 export function SalaryProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Parse URL params on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const restored: Partial<SalaryState> = {};
@@ -277,6 +414,7 @@ export function SalaryProvider({ children }: { children: React.ReactNode }) {
     if (params.get('s')) restored.status = params.get('s') as Status;
     if (params.get('c')) restored.contractType = params.get('c') as ContractType;
     if (params.get('m')) restored.mutuelleMonthly = Number(params.get('m'));
+    if (params.get('p')) restored.pasRate = Number(params.get('p'));
     if (Object.keys(restored).length > 0) {
       dispatch({ type: 'RESTORE_STATE', payload: restored });
     }
@@ -307,5 +445,5 @@ export function formatEuroDecimal(n: number): string {
 
 export function getShareUrl(state: SalaryState): string {
   const base = window.location.origin + window.location.pathname;
-  return `${base}?b=${state.grossAnnual}&s=${state.status}&c=${state.contractType}&m=${state.mutuelleMonthly}`;
+  return `${base}?b=${state.grossAnnual}&s=${state.status}&c=${state.contractType}&m=${state.mutuelleMonthly}&p=${state.pasRate}`;
 }
