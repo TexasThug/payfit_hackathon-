@@ -5,7 +5,7 @@ const PSS_MONTHLY = 3925;
 const SMIC_MONTHLY_GROSS = 1801.80;
 
 export type Status = 'cadre' | 'non-cadre';
-export type ContractType = 'CDI' | 'CDD';
+export type ContractType = 'CDI' | 'CDD' | 'stagiaire';
 export type ActiveTab = 'employee' | 'employer';
 export type SimulationMode = 'raise' | 'bonus' | 'ppv' | null;
 
@@ -30,6 +30,9 @@ export interface SalaryState {
   targetNet: number;
   // Feature 4 — PPV
   ppvAmount: number;
+  // Stagiaire
+  stagiaireMonthly: number;
+  stagiaireDuration: number;
 }
 
 export const initialState: SalaryState = {
@@ -50,6 +53,8 @@ export const initialState: SalaryState = {
   isInverseMode: false,
   targetNet: 2500,
   ppvAmount: 1000,
+  stagiaireMonthly: 800,
+  stagiaireDuration: 6,
 };
 
 type Action =
@@ -68,6 +73,8 @@ type Action =
   | { type: 'SET_INVERSE_MODE'; payload: boolean }
   | { type: 'SET_TARGET_NET'; payload: number }
   | { type: 'SET_PPV_AMOUNT'; payload: number }
+  | { type: 'SET_STAGIAIRE_MONTHLY'; payload: number }
+  | { type: 'SET_STAGIAIRE_DURATION'; payload: number }
   | { type: 'RESTORE_STATE'; payload: Partial<SalaryState> };
 
 function reducer(state: SalaryState, action: Action): SalaryState {
@@ -88,6 +95,8 @@ function reducer(state: SalaryState, action: Action): SalaryState {
     case 'SET_INVERSE_MODE': return { ...state, isInverseMode: action.payload };
     case 'SET_TARGET_NET': return { ...state, targetNet: action.payload, ...edited };
     case 'SET_PPV_AMOUNT': return { ...state, ppvAmount: action.payload };
+    case 'SET_STAGIAIRE_MONTHLY': return { ...state, stagiaireMonthly: action.payload, ...edited };
+    case 'SET_STAGIAIRE_DURATION': return { ...state, stagiaireDuration: action.payload, ...edited };
     case 'RESTORE_STATE': return { ...state, ...action.payload };
     default: return state;
   }
@@ -151,6 +160,18 @@ export interface ComputedValues {
   ppvEmployerCostPPV: number;
   ppvGainEmployee: number;
   ppvSavingEmployer: number;
+  // Stagiaire
+  stagiaireData: {
+    seuil: number;
+    excess: number;
+    chargesSal: number;
+    chargesPat: number;
+    netStagiaire: number;
+    costMonthly: number;
+    costTotal: number;
+    costCDIMonthly: number;
+    savingVsCDI: number;
+  } | null;
 }
 
 // Pure salary computation — no PAS/inverse/PPV (safe for recursive calls)
@@ -225,6 +246,7 @@ function computeCore(state: SalaryState): Omit<ComputedValues,
     ? (cddDuration <= 1 ? 0.03 : cddDuration <= 3 ? 0.015 : 0) * grossMonthly
     : 0;
   const cdd_indemnite_precarite = contractType === 'CDD' ? grossAnnual * 0.1 : 0;
+  // stagiaire treated as CDI for core calc (stagiaire-specific calc done separately)
 
   const total_pat = ss_maladie_pat + ss_vieillesse_plaf_pat + ss_vieillesse_deplaf_pat
     + alloc_fam + atmp + fnal + chomage_pat + ags
@@ -262,6 +284,44 @@ function computeCore(state: SalaryState): Omit<ComputedValues,
     cdd_surcharge, cdd_indemnite_precarite,
     simNetMonthly, simNetAnnual,
   };
+}
+
+// ── Stagiaire calculation ─────────────────────────────────────────────────
+// Seuil exonération = 15 % du PMSS mensuel (art. L.124-6 Code éducation)
+const SEUIL_STAGIAIRE = 0.15 * PSS_MONTHLY; // ≈ 588,75 €
+
+// Taux salarié applicable sur l'excédent (hors chômage)
+const TAUX_SAL_STAG =
+  0.069 + 0.004 + 0.0315 + 0.0086   // SS + AGIRC-T1 + CEG
+  + 0.9825 * (0.068 + 0.024 + 0.005); // CSG déd. + CSG non déd. + CRDS
+
+// Taux patronal sur l'excédent (hors chômage, AGS)
+const TAUX_PAT_STAG =
+  0.07 + 0.0855 + 0.0202 + 0.0345 + 0.0157 + 0.001 + 0.0472 + 0.0129;
+// maladie + vieillesse plaf/déplaf + alloc fam + AT/MP + FNAL + AGIRC-T1 + CEG
+
+function computeStagiaire(state: SalaryState) {
+  const { stagiaireMonthly, stagiaireDuration } = state;
+  const seuil  = SEUIL_STAGIAIRE;
+  const excess = Math.max(0, stagiaireMonthly - seuil);
+
+  const chargesSal   = excess * TAUX_SAL_STAG;
+  const chargesPat   = excess * TAUX_PAT_STAG;
+  const netStagiaire = stagiaireMonthly - chargesSal;
+  const costMonthly  = stagiaireMonthly + chargesPat;
+  const costTotal    = costMonthly * stagiaireDuration;
+
+  // Comparison: même brut en CDI
+  const cdiCore = computeCore({
+    ...state,
+    grossAnnual: stagiaireMonthly * 12,
+    contractType: 'CDI',
+    simulationMode: null,
+  });
+  const costCDIMonthly = cdiCore.employerCost;
+  const savingVsCDI    = (costCDIMonthly - costMonthly) * stagiaireDuration;
+
+  return { seuil, excess, chargesSal, chargesPat, netStagiaire, costMonthly, costTotal, costCDIMonthly, savingVsCDI };
 }
 
 function computeValues(state: SalaryState): ComputedValues {
@@ -314,6 +374,11 @@ function computeValues(state: SalaryState): ComputedValues {
     ppvEmployerCostPPV = state.ppvAmount; // 0 patronal charges
   }
 
+  // Stagiaire
+  const stagiaireData = state.contractType === 'stagiaire'
+    ? computeStagiaire(state)
+    : null;
+
   return {
     ...base,
     pasMonthly,
@@ -327,6 +392,7 @@ function computeValues(state: SalaryState): ComputedValues {
     ppvEmployerCostPPV,
     ppvGainEmployee: ppvNetPPV - ppvNetClassic,
     ppvSavingEmployer: ppvEmployerCostClassic - ppvEmployerCostPPV,
+    stagiaireData,
   };
 }
 
