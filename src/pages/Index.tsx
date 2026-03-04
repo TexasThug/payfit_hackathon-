@@ -2,6 +2,7 @@ import { SalaryProvider } from '@/contexts/SalaryContext';
 import Header from '@/components/Header';
 import Hero from '@/components/Hero';
 import Calculator from '@/components/Calculator';
+import FlowDiagram from '@/components/FlowDiagram';
 import PayslipDecoder from '@/components/PayslipDecoder';
 import ShareSection from '@/components/ShareSection';
 import FAQ from '@/components/FAQ';
@@ -14,6 +15,7 @@ const Index = () => {
         <Header />
         <Hero />
         <Calculator />
+        <FlowDiagram />
         <PayslipDecoder />
         <div className="px-4 md:px-6 pb-8">
           <ShareSection />
